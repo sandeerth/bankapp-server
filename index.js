@@ -19,6 +19,16 @@ app.post('/login',(req,res)=>{
     res.send(result.message);
     
 })
+app.post('/deposit',(req,res)=>{
+    const result = dataService.deposit(req.body.dpacno,req.body.dppin,req.body.dpamt)
+    res.send(result.message);
+    
+})
+app.post('/withdraw',(req,res)=>{
+    const result = dataService.withdraw(req.body.wacno,req.body.wpin,req.body.wamt)
+    res.send(result.message);
+    
+})
 app.listen(3000, ()=>{
     console.log("server started at port 3000");
 })

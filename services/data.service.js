@@ -49,9 +49,68 @@ let currentUser;
     }
   }
 
+  const deposit = (dpacno,dppin,dpamt)=>{
+    var data=accountDetails;
+    if (dpacno in data){
+        var mpin = data[dpacno].pin
+        if (dppin==mpin){
+            data[dpacno].balance+= parseInt(dpamt);
+            data[dpacno].transactions.push({
+              amount:dpamt,
+              type:'Credit'
+            })
+            // this.saveDetails();
+            return {
+              status:true,
+              message:'account has been credited', 
+              balance:data[dpacno].balance
+            }
+        }
+    }
+    else{
+      return {
+        status:false,
+        message:'Incorrect Account Details'
+      }
+    }        
 
+  }
+  const withdraw = (wacno,wpin,wamt)=>{
+    var data=accountDetails;
+    if (wacno in data){
+        var mpin = data[wacno].pin
+        if(data[wacno].balance<parseInt(wamt)){
+          return {
+            status:false,
+            message:'Insufficient balance', 
+            balance:data[wacno].balance
+          }
+        }
+        else if (wpin==mpin){
+            data[wacno].balance-= parseInt(wamt)
+            data[wacno].transactions.push({
+              amount:wamt,
+              type:'Debit'
+            })
+            // this.saveDetails();
+            return {
+              status:true,
+              message:'account has been debited', 
+              balance:data[wacno].balance
+            }
+        }
+    }
+    else{
+      return {
+        status:false,
+        message:'Incorrect Account Details'
+      }
+    }
+  }    
 
   module.exports={
       register,
-      login
+      login,
+      deposit,
+      withdraw
   }
