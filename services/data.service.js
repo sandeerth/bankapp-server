@@ -1,116 +1,192 @@
-let   accountDetails={
+const db = require('./db');
+
+let accountDetails={
     1001:{name:"user1", acno:1001, pin:1234, password:'userone', balance:3000, transactions:[]},
     1002:{name:"user2", acno:1002, pin:2345, password:'usertwo', balance:2500, transactions:[]},
     1003:{name:"user3", acno:1003, pin:3456, password:'userthree', balance:3500, transactions:[]},
     1004:{name:"user4", acno:1004, pin:4567, password:'userfour', balance:4000, transactions:[]},
     1005:{name:"user5", acno:1005, pin:5678, password:'userfive', balance:5000, transactions:[]},
-  }
+}
 let currentUser;
-  const register = (name,acno,pin,password)=>{
-    if (acno in accountDetails){
-     return {
-         status:false,
-         message:"Account already exists. Pleas login"
 
-     } 
-     
-    }
-    accountDetails[acno]={
-      name,
-      acno,
-      pin,
-      password,
-      balance:0,
-      transactions:[]
-    }
-    // this.saveDetails();
-    return {
-        status:true,
-        message:'account created successfully '
-    }
-  }
-  const login= (acno1, password)=>{
-    var acno=parseInt(acno1);
-    var data=accountDetails;
-    if (acno in data){
-      var pwd = data[acno].password
-      if (pwd==password){
-        currentUser = data[acno];
-        // this.saveDetails();
+const register = (name,acno,pin,password)=>{
+    return db.User.findOne({
+      acno:acno
+    })
+    .then(user=>{
+      if(user){
         return {
-            status:true,
-            message:'logged in'
+          status:false,
+          statusCode:422,
+          message:'Account already exists. Please login'
         }
+      }
+      const newUser = new db.User({
+        name,
+        acno,
+        pin,
+        password,
+        balance:0,
+        transactions:[]
+      });
+      newUser.save();
+      return {
+        status:true,
+        statusCode:200,
+        message:'Account created successfully. Please login'
+      };
+    });
+}
+
+const login = (req,acno1, password)=>{
+  var acno=parseInt(acno1);
+  return db.User.findOne({
+    acno:acno,
+    password
+  })
+  .then(user=>{
+    if(user){
+      req.session.currentUser=acno;
+      return {
+          status:true,
+          statusCode:200,
+          message:'Logged in',
+          name:user.name
       }
     }
     return {
         status:false,
-        message:"invalid credentials"
+        statusCode:422,
+        message:'Invalid Credentials'
     }
-  }
+  })
+}
 
-  const deposit = (dpacno,dppin,dpamt)=>{
-    var data=accountDetails;
-    if (dpacno in data){
-        var mpin = data[dpacno].pin
-        if (dppin==mpin){
-            data[dpacno].balance+= parseInt(dpamt);
-            data[dpacno].transactions.push({
-              amount:dpamt,
-              type:'Credit'
-            })
-            // this.saveDetails();
-            return {
-              status:true,
-              message:'account has been credited', 
-              balance:data[dpacno].balance
-            }
-        }
-    }
-    else{
+const deposit = (req,dpacno,dppin,dpamt)=>{
+  return db.User.findOne({
+    acno:dpacno,
+    pin: dppin
+  })
+  .then(user=>{
+    if(req.session.currentUser!=dpacno){
       return {
-        status:false,
-        message:'Incorrect Account Details'
+          status:false,
+          statusCode:422,
+          message:'You are not allowed to make this transaction'
       }
-    }        
-
-  }
-  const withdraw = (wacno,wpin,wamt)=>{
-    var data=accountDetails;
-    if (wacno in data){
-        var mpin = data[wacno].pin
-        if(data[wacno].balance<parseInt(wamt)){
-          return {
+    }
+    if(!user){
+        return {
             status:false,
-            message:'Insufficient balance', 
-            balance:data[wacno].balance
-          }
-        }
-        else if (wpin==mpin){
-            data[wacno].balance-= parseInt(wamt)
-            data[wacno].transactions.push({
-              amount:wamt,
-              type:'Debit'
-            })
-            // this.saveDetails();
-            return {
-              status:true,
-              message:'account has been debited', 
-              balance:data[wacno].balance
-            }
+            statusCode:422,
+            message:'Incorrect Account Details'
         }
     }
-    else{
+    user.balance+= parseInt(dpamt);
+    user.transactions.push({
+      amount:dpamt,
+      typeOfTransaction:'Credit'
+    });
+    user.save();
+    return {
+      status:true,
+      statusCode:200,
+      message:'account has been credited', 
+      balance:user.balance
+    }
+  });
+}
+
+const withdraw = (req,wacno,wpin,wamt)=>{
+  return db.User.findOne({
+    acno:wacno,
+    pin: wpin
+  })
+  .then(user=>{
+    if(!user){
+        return {
+            status:false,
+            statusCode:422,
+            message:'Incorrect Account Details'
+        }
+    }
+    if(req.session.currentUser!=wacno){
       return {
-        status:false,
-        message:'Incorrect Account Details'
+          status:false,
+          statusCode:422,
+          message:'You are not allowed to make this transaction'
       }
     }
-  }    
+    if(user.balance<parseInt(wamt)){
+      return {
+        status:false,
+        statusCode:422,
+        message:'Insufficient balance', 
+        balance:user.balance
+      }
+    }
+    user.balance-= parseInt(wamt)
+    user.transactions.push({
+      amount:wamt,
+      typeOfTransaction:'Debit'
+    })
+    user.save();
+    return {
+      status:true,
+      statusCode:200,
+      message:'account has been debited', 
+      balance:user.balance
+    }
+  })
+}
 
-  module.exports={
-      register,
-      login,
-      deposit,
-      withdraw
-  }
+const getTransactions = (req)=>{
+  return db.User.findOne({
+    acno:req.session.currentUser
+  })
+  .then(user=>{
+    return {
+      status:true,
+      statusCode:200,
+      transactions:user.transactions
+    }
+  })
+}
+
+const deleteTransaction = (req, id)=>{
+  return db.User.findOne({
+    acno:req.session.currentUser
+  })
+  .then(user=>{
+    user.transactions = user.transactions.filter(t=>{
+      if(t._id==id){
+          return false;
+      }
+      return true;
+    })
+    user.save();
+    return {
+      status:true,
+      statusCode:200,
+      message:'Transaction deleted successfully'
+    }
+  })
+}
+
+// getDetails(){
+//     if(localStorage.getItem("accountDetails")){
+//       this.accountDetails = JSON.parse(localStorage.getItem("accountDetails"));
+//     }
+//     if(localStorage.getItem("currentUser")){
+//       this.currentUser = JSON.parse(localStorage.getItem("currentUser"));
+//     }
+// }
+
+module.exports={
+    register,
+    login,
+    deposit,
+    withdraw,
+    getTransactions,
+    deleteTransaction
+}
